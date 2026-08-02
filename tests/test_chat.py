@@ -4,13 +4,14 @@ from fastapi.testclient import TestClient
 
 from gateway.main import app
 from gateway.models.response import CanonicalResponse, FinishReason
+from gateway.router import OLLAMA_MODEL
 
 client = TestClient(app)
 
 _STUB_RESPONSE = CanonicalResponse(
     content="Hello",
-    model="gpt-4o-mini",
-    provider="openai",
+    model=OLLAMA_MODEL,
+    provider="ollama",
     input_tokens=10,
     output_tokens=5,
     latency_ms=100,
@@ -30,7 +31,7 @@ def _mock_session():
 def test_chat_returns_canonical_response():
     with (
         patch(
-            "gateway.adapters.openai.complete",
+            "gateway.adapters.dispatch",
             new=AsyncMock(return_value=_STUB_RESPONSE),
         ),
         patch("gateway.routes.chat.AsyncSessionLocal", new=_mock_session()),
@@ -42,8 +43,8 @@ def test_chat_returns_canonical_response():
     assert response.status_code == 200
     data = response.json()
     assert data["content"] == "Hello"
-    assert data["model"] == "gpt-4o-mini"
-    assert data["provider"] == "openai"
+    assert data["model"] == OLLAMA_MODEL
+    assert data["provider"] == "ollama"
     assert data["input_tokens"] == 10
     assert data["finish_reason"] == "stop"
 
@@ -64,7 +65,7 @@ def test_chat_log_written_on_success():
     mock_session = _mock_session()
     with (
         patch(
-            "gateway.adapters.openai.complete",
+            "gateway.adapters.dispatch",
             new=AsyncMock(return_value=_STUB_RESPONSE),
         ),
         patch("gateway.routes.chat.AsyncSessionLocal", new=mock_session),
@@ -75,7 +76,7 @@ def test_chat_log_written_on_success():
     session_instance.add.assert_called_once()
     log = session_instance.add.call_args[0][0]
     assert log.response_status.value == "success"
-    assert log.chosen_model == "gpt-4o-mini"
+    assert log.chosen_model == OLLAMA_MODEL
     assert log.input_tokens == 10
 
 
@@ -84,7 +85,7 @@ def test_chat_log_written_on_error():
     error_client = TestClient(app, raise_server_exceptions=False)
     with (
         patch(
-            "gateway.adapters.openai.complete",
+            "gateway.adapters.dispatch",
             new=AsyncMock(side_effect=Exception("provider failure")),
         ),
         patch("gateway.routes.chat.AsyncSessionLocal", new=mock_session),
@@ -98,5 +99,5 @@ def test_chat_log_written_on_error():
     session_instance.add.assert_called_once()
     log = session_instance.add.call_args[0][0]
     assert log.response_status.value == "error"
-    assert log.chosen_model is None
+    assert log.chosen_model == OLLAMA_MODEL  # model is known even on error
     assert log.input_tokens is None

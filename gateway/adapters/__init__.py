@@ -4,12 +4,13 @@
 from gateway.adapters import ollama, openai
 from gateway.models.request import CanonicalRequest
 from gateway.models.response import CanonicalResponse
+from gateway.router import OLLAMA_MODEL, OPENAI_MODEL
 
 # Maps model identifiers (as returned by the router) to their adapter functions.
 # Adding a new provider means adding an entry here and creating the adapter module.
 _REGISTRY: dict[str, object] = {
-    "gpt-4o-mini": openai.complete,
-    "llama3.2:3b": ollama.complete,
+    OPENAI_MODEL: openai.complete,
+    OLLAMA_MODEL: ollama.complete,
 }
 
 
