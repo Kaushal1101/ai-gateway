@@ -58,3 +58,45 @@ def test_chat_invalid_role_returns_422():
 def test_chat_missing_messages_returns_422():
     response = client.post("/chat", json={})
     assert response.status_code == 422
+
+
+def test_chat_log_written_on_success():
+    mock_session = _mock_session()
+    with (
+        patch(
+            "gateway.adapters.openai.complete",
+            new=AsyncMock(return_value=_STUB_RESPONSE),
+        ),
+        patch("gateway.routes.chat.AsyncSessionLocal", new=mock_session),
+    ):
+        client.post("/chat", json={"messages": [{"role": "user", "content": "hello"}]})
+
+    session_instance = mock_session.return_value.__aenter__.return_value
+    session_instance.add.assert_called_once()
+    log = session_instance.add.call_args[0][0]
+    assert log.response_status.value == "success"
+    assert log.chosen_model == "gpt-4o-mini"
+    assert log.input_tokens == 10
+
+
+def test_chat_log_written_on_error():
+    mock_session = _mock_session()
+    error_client = TestClient(app, raise_server_exceptions=False)
+    with (
+        patch(
+            "gateway.adapters.openai.complete",
+            new=AsyncMock(side_effect=Exception("provider failure")),
+        ),
+        patch("gateway.routes.chat.AsyncSessionLocal", new=mock_session),
+    ):
+        response = error_client.post(
+            "/chat", json={"messages": [{"role": "user", "content": "hello"}]}
+        )
+
+    assert response.status_code == 500
+    session_instance = mock_session.return_value.__aenter__.return_value
+    session_instance.add.assert_called_once()
+    log = session_instance.add.call_args[0][0]
+    assert log.response_status.value == "error"
+    assert log.chosen_model is None
+    assert log.input_tokens is None
