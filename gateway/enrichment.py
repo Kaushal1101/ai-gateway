@@ -71,10 +71,17 @@ def _bucket_complexity(tokens: int) -> PromptComplexity:
 def _infer_task_type(request: CanonicalRequest) -> TaskType:
     words = " ".join(m.content for m in request.messages).lower().split()
     word_set = set(words)
+
+    best_type = TaskType.general
+    best_count = 0
+
     for task_type, keywords in _TASK_KEYWORDS:
-        if word_set & keywords:
-            return task_type
-    return TaskType.general
+        count = len(word_set & keywords)
+        if count > best_count:
+            best_count = count
+            best_type = task_type
+
+    return best_type
 
 
 def enrich(request: CanonicalRequest) -> CanonicalRequest:
