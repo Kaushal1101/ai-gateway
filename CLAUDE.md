@@ -58,6 +58,7 @@ uv sync
 - Challenge my design decisions if something seems wrong or has a better alternative. Don't just execute.
 - Keep code changes small and focused. Each change should leave the system in a working, testable state.
 - Never generate large amounts of code in one go without prior discussion.
+- Never commit or push code without my permission.
 
 ---
 
