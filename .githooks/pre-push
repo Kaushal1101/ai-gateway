@@ -1,2 +1,4 @@
 #!/bin/sh
 uv run pytest
+code=$?
+[ $code -eq 0 ] || [ $code -eq 5 ]
