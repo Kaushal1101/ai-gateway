@@ -9,7 +9,7 @@ The gateway is a Python HTTP server that sits between clients and LLM providers.
 ## Tech Stack
 
 ### Language and Runtime
-- **Python 3.12+**
+- **Python 3.13+**
 - **uv** for dependency management
 
 ### Web Framework — FastAPI
@@ -59,33 +59,29 @@ FastAPI is the right choice for a gateway for two reasons:
 ai-gateway/
 ├── gateway/
 │   ├── __main__.py           # entry point: uvicorn server startup
-│   ├── server.py             # FastAPI app, route definitions
+│   ├── main.py               # FastAPI app, lifespan, route mounting
+│   ├── db.py                 # SQLAlchemy engine, session factory, Base
 │   ├── models/
 │   │   ├── request.py        # canonical request (Pydantic model)
-│   │   └── response.py       # canonical response (Pydantic model)
+│   │   ├── response.py       # canonical response (Pydantic model)
+│   │   └── log.py            # RequestLog (SQLAlchemy model)
 │   ├── adapters/
-│   │   ├── base.py           # abstract adapter interface
-│   │   ├── openai.py         # OpenAI adapter
-│   │   └── ollama.py         # Ollama adapter
-│   ├── router/
-│   │   ├── base.py           # abstract router interface
-│   │   ├── rule_based.py     # V1: routes using prompt length, keywords, hints
-│   │   ├── embedding.py      # V2: routes using semantic similarity over request history
-│   │   └── learned.py        # V3: routes using a trained classifier
-│   ├── logging/
-│   │   └── request_log.py    # RequestLog model and persistence
-│   └── db/
-│       └── session.py        # SQLAlchemy async session setup
+│   │   └── openai.py         # OpenAI adapter
+│   └── routes/
+│       └── chat.py           # /chat route handler
+├── migrations/
+│   ├── env.py                # Alembic runtime config
+│   ├── script.py.mako        # migration file template
+│   └── versions/             # one file per migration
 ├── infra/
 │   ├── nginx.conf            # nginx load balancer config (Stage 7)
 │   ├── prometheus.yml        # Prometheus scrape config (Stage 6)
 │   └── pgbouncer.ini         # PgBouncer connection pool config (Stage 7)
-├── alembic/
-│   ├── env.py                # Alembic runtime config
-│   ├── script.py.mako        # migration file template
-│   └── versions/             # one file per migration
 ├── tests/
 ├── docs/
+├── .github/
+│   └── workflows/
+│       └── ci.yml            # GitHub Actions CI
 ├── .githooks/
 ├── .claude/
 ├── .env                      # local secrets — never committed
