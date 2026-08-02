@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -18,9 +18,22 @@ _STUB_RESPONSE = CanonicalResponse(
 )
 
 
+def _mock_session():
+    session = MagicMock()
+    session.add = MagicMock()
+    session.commit = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=session)
+
+
 def test_chat_returns_canonical_response():
-    with patch(
-        "gateway.adapters.openai.complete", new=AsyncMock(return_value=_STUB_RESPONSE)
+    with (
+        patch(
+            "gateway.adapters.openai.complete",
+            new=AsyncMock(return_value=_STUB_RESPONSE),
+        ),
+        patch("gateway.routes.chat.AsyncSessionLocal", new=_mock_session()),
     ):
         response = client.post(
             "/chat", json={"messages": [{"role": "user", "content": "hello"}]}
