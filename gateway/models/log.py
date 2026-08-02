@@ -19,11 +19,11 @@ class RequestLog(Base):
     __tablename__ = "request_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    chosen_model: Mapped[str]
-    provider: Mapped[str]
-    input_tokens: Mapped[int]
-    output_tokens: Mapped[int]
-    provider_latency_ms: Mapped[int]
+    chosen_model: Mapped[str | None]
+    provider: Mapped[str | None]
+    input_tokens: Mapped[int | None]
+    output_tokens: Mapped[int | None]
+    provider_latency_ms: Mapped[int | None]
     response_status: Mapped[ResponseStatus] = mapped_column(
         SAEnum(ResponseStatus, name="response_status")
     )
