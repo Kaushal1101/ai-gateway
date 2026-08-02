@@ -174,7 +174,7 @@ HTTP server + one adapter (OpenAI). No routing — all requests go to one hardco
 Instrument every request with a `RequestLog`. Persist to local database. Must be built before routing so V1 history is available for V2.
 
 ### Stage 3 — V1 Router + second provider
-Add a second adapter. Implement rule-based router against canonical request fields. Router returns a ranked list of models. Add provider rate limit awareness — track requests-per-minute per provider and route away proactively before hitting API limits.
+Add an Ollama adapter (local, free, no API key required). Implement rule-based router against canonical request fields. Router returns a ranked list of models. Add provider rate limit awareness — track requests-per-minute per provider and route away proactively before hitting API limits.
 
 ### Stage 4 — Fallback
 Walk the top-3 ranked list on failure or timeout. Purely operational — router does not change. Circuit breaker deferred to later.
