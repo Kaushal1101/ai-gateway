@@ -1,19 +1,16 @@
 from fastapi import APIRouter
 
+from gateway.adapters import openai
 from gateway.models.request import CanonicalRequest
-from gateway.models.response import CanonicalResponse, FinishReason
+from gateway.models.response import CanonicalResponse
 
 router = APIRouter()
 
 
 @router.post("/chat", response_model=CanonicalResponse)
 async def chat(request: CanonicalRequest) -> CanonicalResponse:
-    return CanonicalResponse(
-        content="stub response",
-        model="stub",
-        provider="stub",
-        input_tokens=0,
-        output_tokens=0,
-        latency_ms=0,
-        finish_reason=FinishReason.stop,
-    )
+
+    response = await openai.complete(request)
+
+    # OpenAI returns Canonical response, so we can just return it
+    return response
