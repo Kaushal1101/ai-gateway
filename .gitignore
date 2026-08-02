@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+
+# Environment
+.env
+
+# Ruff
+.ruff_cache/
+
+# Pytest
+.pytest_cache/
+
+# Local Claude settings
+.claude/settings.local.json
+
+# Dev Plans
+docs/current.md

@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/kaushaljayapragash/Desktop/Projects/ai-gateway && uv run ruff check . && uv run ruff format --check . 2>/dev/null || true",
+            "statusMessage": "Linting..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/kaushaljayapragash/Desktop/Projects/ai-gateway && git diff --stat 2>/dev/null || true",
+            "statusMessage": "Diffing..."
+          }
+        ]
+      }
+    ]
+  }
+}
