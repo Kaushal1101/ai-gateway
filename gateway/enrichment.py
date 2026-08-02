@@ -1,6 +1,6 @@
 import tiktoken
 
-from gateway.models.request import CanonicalRequest, TaskType
+from gateway.models.request import CanonicalRequest, PromptComplexity, TaskType
 
 _ENCODING = tiktoken.get_encoding("cl100k_base")
 
@@ -56,6 +56,18 @@ def _estimate_tokens(request: CanonicalRequest) -> int:
     return sum(len(_ENCODING.encode(m.content)) for m in request.messages)
 
 
+_COMPLEXITY_MEDIUM_THRESHOLD = 500
+_COMPLEXITY_HIGH_THRESHOLD = 2000
+
+
+def _bucket_complexity(tokens: int) -> PromptComplexity:
+    if tokens < _COMPLEXITY_MEDIUM_THRESHOLD:
+        return PromptComplexity.low
+    if tokens < _COMPLEXITY_HIGH_THRESHOLD:
+        return PromptComplexity.medium
+    return PromptComplexity.high
+
+
 def _infer_task_type(request: CanonicalRequest) -> TaskType:
     words = " ".join(m.content for m in request.messages).lower().split()
     word_set = set(words)
@@ -68,10 +80,12 @@ def _infer_task_type(request: CanonicalRequest) -> TaskType:
 def enrich(request: CanonicalRequest) -> CanonicalRequest:
     tokens = _estimate_tokens(request)
     task_type = _infer_task_type(request)
+    complexity = _bucket_complexity(tokens)
 
     return request.model_copy(
         update={
             "estimated_input_tokens": request.estimated_input_tokens or tokens,
             "task_type": request.task_type or task_type,
+            "prompt_complexity": request.prompt_complexity or complexity,
         }
     )
