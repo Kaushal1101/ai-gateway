@@ -13,22 +13,27 @@ app_router = APIRouter()
 async def chat(request: CanonicalRequest) -> CanonicalResponse:
     enriched = enrichment.enrich(request)
     ranked = router.rank(enriched)
-    model = ranked[0]
 
-    try:
-        response = await adapters.dispatch(model, enriched)
+    last_exc = None
+    for model in ranked:
+        try:
+            response = await adapters.dispatch(model, enriched)
+            log = RequestLog(
+                chosen_model=response.model,
+                provider=response.provider,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                provider_latency_ms=response.latency_ms,
+                response_status=ResponseStatus.success,
+                canonical_request=enriched.model_dump(),
+            )
+            break
+        except Exception as e:
+            last_exc = e
+
+    else:
         log = RequestLog(
-            chosen_model=response.model,
-            provider=response.provider,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            provider_latency_ms=response.latency_ms,
-            response_status=ResponseStatus.success,
-            canonical_request=enriched.model_dump(),
-        )
-    except Exception:
-        log = RequestLog(
-            chosen_model=model,
+            chosen_model=ranked[0],
             provider=None,
             input_tokens=None,
             output_tokens=None,
@@ -39,7 +44,7 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
         async with AsyncSessionLocal() as session:
             session.add(log)
             await session.commit()
-        raise
+        raise last_exc
 
     async with AsyncSessionLocal() as session:
         session.add(log)
