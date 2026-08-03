@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from gateway.main import app
@@ -27,6 +28,15 @@ _STUB_OPENAI = CanonicalResponse(
     latency_ms=200,
     finish_reason=FinishReason.stop,
 )
+
+
+@pytest.fixture(autouse=True)
+def _mock_embedding_and_similarity():
+    with (
+        patch("gateway.embedding.embed", new=AsyncMock(return_value=[0.0] * 768)),
+        patch("gateway.similarity.find_similar", new=AsyncMock(return_value=[])),
+    ):
+        yield
 
 
 def _mock_session():

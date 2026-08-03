@@ -185,16 +185,19 @@ Generate and store prompt embeddings. Use similarity search over `RequestLog` to
 ### Stage 6 — Observability
 Add Prometheus metrics and Grafana dashboards. Track request latency, provider error rates, DB query times, and routing decisions per model. Required before any scaling work — you can't reason about bottlenecks without visibility.
 
-### Stage 7 — Horizontal scaling
+### Stage 7 — Replace Ollama with vLLM
+Ollama is used as the local cheap provider for development because it is free and runs on Apple Silicon via Metal. It is not suitable for production — Docker containers on Mac cannot access the Metal GPU, so Ollama in a containerised environment falls back to CPU-only inference. Replace the Ollama adapter with vLLM, a production-grade inference server that runs in Docker, supports NVIDIA/AMD GPUs, and exposes an OpenAI-compatible API. The adapter pattern means this is largely a config and adapter swap. The Ollama adapter can be retained for local dev via an env flag.
+
+### Stage 8 — Horizontal scaling
 Run multiple gateway instances behind an nginx load balancer. Gateway is stateless by design so this requires no application changes. Add PgBouncer between the gateway instances and Postgres to pool connections — this is typically the first database bottleneck under concurrent load.
 
-### Stage 8 — Database scaling
+### Stage 9 — Database scaling
 Add a Postgres read replica. V2 embedding similarity queries are reads — route them to the replica, keeping the primary free for `RequestLog` writes. Vertical scaling (more RAM/CPU) should be tried before replication.
 
-### Stage 9 — Client rate limiting
+### Stage 10 — Client rate limiting
 Add per-client rate limiting at the nginx layer. Throttle clients before requests reach the gateway. Implement as a sliding window per API key.
 
-### Stage 10 — V3 Router *(later)*
+### Stage 11 — V3 Router *(later)*
 Train a lightweight classifier on accumulated routing data. Scope depends on data volume and available quality signals.
 
 ---

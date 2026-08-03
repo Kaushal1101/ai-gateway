@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from gateway import adapters, enrichment, router
+from gateway import adapters, embedding, enrichment, router, similarity
 from gateway.db import AsyncSessionLocal
 from gateway.models.log import RequestLog, ResponseStatus
 from gateway.models.request import CanonicalRequest
@@ -12,7 +12,14 @@ app_router = APIRouter()
 @app_router.post("/chat", response_model=CanonicalResponse)
 async def chat(request: CanonicalRequest) -> CanonicalResponse:
     enriched = enrichment.enrich(request)
-    ranked = router.rank(enriched)
+
+    try:
+        vec = await embedding.embed(enriched)
+    except Exception:
+        vec = None
+
+    similar = await similarity.find_similar(vec)
+    ranked = router.rank(enriched, similar)
 
     last_exc = None
     fallback_count = 0
@@ -28,6 +35,7 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
                 response_status=ResponseStatus.success,
                 canonical_request=enriched.model_dump(),
                 fallback_count=fallback_count,
+                embedding=vec,
             )
             break
         except Exception as e:
@@ -44,6 +52,7 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
             response_status=ResponseStatus.error,
             canonical_request=enriched.model_dump(),
             fallback_count=fallback_count,
+            embedding=None,
         )
         async with AsyncSessionLocal() as session:
             session.add(log)
