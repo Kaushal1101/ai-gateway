@@ -63,3 +63,35 @@ def test_rank_default_prefers_ollama():
 def test_rank_always_returns_multiple_models():
     request = _make_request()
     assert len(rank(request)) > 1
+
+
+# --- V2 routing (similarity-based) ---
+
+
+def test_rank_v2_uses_similar_when_provided():
+    request = _make_request()
+    similar = [(OPENAI_MODEL, 0.97)]
+    assert rank(request, similar) == [OPENAI_MODEL]
+
+
+def test_rank_v2_returns_all_similar_models_in_order():
+    request = _make_request()
+    similar = [(OPENAI_MODEL, 0.97), (OLLAMA_MODEL, 0.93)]
+    assert rank(request, similar) == [OPENAI_MODEL, OLLAMA_MODEL]
+
+
+def test_rank_latency_hint_takes_precedence_over_v2():
+    # latency_hint is client-provided, so it overrides gateway-inferred similarity
+    request = _make_request(latency_hint=LatencyHint.low)
+    similar = [(OPENAI_MODEL, 0.97)]
+    assert rank(request, similar)[0] == OLLAMA_MODEL
+
+
+def test_rank_v2_falls_back_to_v1_when_similar_empty():
+    request = _make_request()
+    assert rank(request, similar=[])[0] == OLLAMA_MODEL
+
+
+def test_rank_v2_falls_back_to_v1_when_similar_none():
+    request = _make_request()
+    assert rank(request, similar=None)[0] == OLLAMA_MODEL

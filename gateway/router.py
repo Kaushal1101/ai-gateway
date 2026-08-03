@@ -23,9 +23,6 @@ def _rank_v2(similar: list[tuple[str, float]]) -> list[str]:
 def rank(
     request: CanonicalRequest, similar: list[tuple[str, float]] | None = None
 ) -> list[str]:
-    if similar:
-        return _rank_v2(similar)
-
     # Client override — bypass routing entirely
     if request.model:
         if request.model not in _KNOWN_MODELS:
@@ -36,7 +33,11 @@ def rank(
     if request.latency_hint == LatencyHint.low:
         return _OLLAMA_FIRST
 
-    # Precision tasks and high complexity: prefer the more capable model
+    # V2: use historical similarity when available
+    if similar:
+        return _rank_v2(similar)
+
+    # V1: precision tasks and high complexity prefer the more capable model
     if request.task_type in _TASK_TYPE_PREFERS_OPENAI:
         return _OPENAI_FIRST
     if request.prompt_complexity == PromptComplexity.high:
