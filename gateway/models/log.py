@@ -1,13 +1,17 @@
 import enum
+import os
 from datetime import datetime
 from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, DateTime
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from gateway.db import Base
+
+_EMBEDDING_DIMS = int(os.getenv("EMBEDDING_DIMS", "768"))
 
 
 class ResponseStatus(str, enum.Enum):
@@ -29,6 +33,9 @@ class RequestLog(Base):
     )
     canonical_request: Mapped[dict[str, Any]] = mapped_column(JSON)
     fallback_count: Mapped[int]
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(_EMBEDDING_DIMS), nullable=True
+    )
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
