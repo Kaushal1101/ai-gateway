@@ -15,6 +15,7 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
     ranked = router.rank(enriched)
 
     last_exc = None
+    fallback_count = 0
     for model in ranked:
         try:
             response = await adapters.dispatch(model, enriched)
@@ -26,9 +27,11 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
                 provider_latency_ms=response.latency_ms,
                 response_status=ResponseStatus.success,
                 canonical_request=enriched.model_dump(),
+                fallback_count=fallback_count,
             )
             break
         except Exception as e:
+            fallback_count += 1
             last_exc = e
 
     else:
@@ -40,6 +43,7 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
             provider_latency_ms=None,
             response_status=ResponseStatus.error,
             canonical_request=enriched.model_dump(),
+            fallback_count=fallback_count,
         )
         async with AsyncSessionLocal() as session:
             session.add(log)
