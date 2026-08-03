@@ -34,4 +34,12 @@ async def find_similar(vec: list[float] | None) -> list[tuple[str, float]]:
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(stmt)
-        return [(row.chosen_model, float(row.similarity)) for row in result]
+        # Deduplicate by model: unanimous history may return fewer than _TOP_K entries,
+        # which means the caller will have fewer fallback options — this is intentional.
+        seen: set[str] = set()
+        rows = []
+        for row in result:
+            if row.chosen_model not in seen:
+                seen.add(row.chosen_model)
+                rows.append((row.chosen_model, float(row.similarity)))
+        return rows

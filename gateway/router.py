@@ -16,7 +16,16 @@ _OLLAMA_FIRST = [OLLAMA_MODEL, OPENAI_MODEL]
 _TASK_TYPE_PREFERS_OPENAI = {TaskType.code, TaskType.math}
 
 
-def rank(request: CanonicalRequest) -> list[str]:
+def _rank_v2(similar: list[tuple[str, float]]) -> list[str]:
+    return [model for model, _ in similar]
+
+
+def rank(
+    request: CanonicalRequest, similar: list[tuple[str, float]] | None = None
+) -> list[str]:
+    if similar:
+        return _rank_v2(similar)
+
     # Client override — bypass routing entirely
     if request.model:
         if request.model not in _KNOWN_MODELS:
