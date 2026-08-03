@@ -28,6 +28,7 @@ class RequestLog(Base):
         SAEnum(ResponseStatus, name="response_status")
     )
     canonical_request: Mapped[dict[str, Any]] = mapped_column(JSON)
+    fallback_count: Mapped[int]
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

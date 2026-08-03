@@ -8,6 +8,9 @@ from gateway.models.response import CanonicalResponse, FinishReason
 
 _API_URL = "https://api.openai.com/v1/chat/completions"
 _DEFAULT_MODEL = "gpt-4o-mini"
+_CONNECT_TIMEOUT = float(os.getenv("GATEWAY_CONNECT_TIMEOUT", "5.0"))
+_READ_TIMEOUT = 30.0
+_TIMEOUT = httpx.Timeout(_CONNECT_TIMEOUT, read=_READ_TIMEOUT)
 
 _FINISH_REASON_MAP = {
     "stop": FinishReason.stop,
@@ -36,7 +39,7 @@ async def complete(request: CanonicalRequest) -> CanonicalResponse:
     start = time.monotonic()
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            _API_URL, json=payload, headers=headers, timeout=60.0
+            _API_URL, json=payload, headers=headers, timeout=_TIMEOUT
         )
         response.raise_for_status()
     latency_ms = int((time.monotonic() - start) * 1000)
