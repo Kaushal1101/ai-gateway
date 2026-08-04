@@ -19,7 +19,7 @@ _FINISH_REASON_MAP = {
 
 
 async def complete(request: CanonicalRequest) -> CanonicalResponse:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY", "")
 
     payload: dict = {
         "model": request.model or _DEFAULT_MODEL,
