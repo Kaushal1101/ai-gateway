@@ -1,6 +1,8 @@
+import time
+
 from fastapi import APIRouter
 
-from gateway import adapters, embedding, enrichment, router, similarity
+from gateway import adapters, embedding, enrichment, metrics, router, similarity
 from gateway.db import AsyncSessionLocal
 from gateway.models.log import RequestLog, ResponseStatus
 from gateway.models.request import CanonicalRequest
@@ -11,6 +13,7 @@ app_router = APIRouter()
 
 @app_router.post("/chat", response_model=CanonicalResponse)
 async def chat(request: CanonicalRequest) -> CanonicalResponse:
+    start = time.monotonic()
     enriched = enrichment.enrich(request)
 
     try:
@@ -37,6 +40,8 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
                 fallback_count=fallback_count,
                 embedding=vec,
             )
+            duration_ms = (time.monotonic() - start) * 1000
+            metrics.REQUEST_LATENCY.observe(duration_ms)
             break
         except Exception as e:
             fallback_count += 1
@@ -57,6 +62,10 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
         async with AsyncSessionLocal() as session:
             session.add(log)
             await session.commit()
+
+        duration_ms = (time.monotonic() - start) * 1000
+        metrics.REQUEST_LATENCY.observe(duration_ms)
+
         raise last_exc
 
     async with AsyncSessionLocal() as session:
