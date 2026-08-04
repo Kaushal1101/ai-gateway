@@ -40,8 +40,16 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
                 fallback_count=fallback_count,
                 embedding=vec,
             )
+
+            # Prometheus model and route tracking
+            metrics.MODEL_CHOSEN.labels(
+                model=response.model, routing_version="v2" if similar else "v1"
+            ).inc()
+
+            # Prometheus latency tracking
             duration_ms = (time.monotonic() - start) * 1000
             metrics.REQUEST_LATENCY.observe(duration_ms)
+
             break
         except Exception as e:
             fallback_count += 1
@@ -63,6 +71,7 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
             session.add(log)
             await session.commit()
 
+        # Prometheus latency tracking
         duration_ms = (time.monotonic() - start) * 1000
         metrics.REQUEST_LATENCY.observe(duration_ms)
 
