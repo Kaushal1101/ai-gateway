@@ -133,11 +133,24 @@ Route using simple rules derived from canonical request fields:
 
 Requires: populated `RequestLog` from V1.
 
-### V3 — Learned Router
+### V3 — Contextual Bandit Router
 
-- Train a lightweight classifier on accumulated routing history
-- Features: prompt embedding + prompt metadata + historical outcomes
-- Requires: sufficient labeled history and a defined quality signal
+Route using a LinUCB (Linear Upper Confidence Bound) contextual bandit. Unlike a
+supervised classifier, the bandit actively explores — it will occasionally route to
+a non-default provider to update its beliefs, which prevents the router from
+permanently over-fitting to early routing decisions.
+
+- **Arms**: one per provider/model (Ollama, Gemini Flash, GPT-4o-mini, Claude Haiku)
+- **Context features**: `task_type`, `prompt_complexity`, `estimated_input_tokens`, `latency_hint`
+- **Reward**: phased — cost × (1 / latency_ms) at launch; quality signal added once defined
+- **Cold start**: warm-start priors from a HuggingFace preference dataset (LMSYS Chatbot Arena) before live traffic accumulates
+- **Algorithm**: LinUCB — linear reward model, interpretable feature weights, low decision-time cost
+
+Requires: populated `RequestLog` from V1/V2, and a defined reward function.
+
+**Why not a cascade?** A cascade always makes two model calls on hard requests, doubling
+latency for exactly the traffic that is already slowest. The bandit makes one call and
+learns from the outcome, keeping latency predictable across all request types.
 
 ---
 
@@ -158,7 +171,7 @@ Track failure rates per provider over a rolling window and temporarily remove pr
 
 ## Open Questions
 
-- **Quality signal**: What does "acceptable" mean? V1 routes on cost/latency only. A quality signal (user feedback, proxy metrics, judge model) is needed before V3 is meaningful.
+- **Quality signal**: The V3 bandit launches with cost × (1 / latency_ms) as its reward — automatic and requiring no user input. A quality component is the remaining open question: options are LLM-as-judge (automatic but adds latency/cost per request), user feedback (ground truth but sparse and delayed), or downstream task success (most meaningful but only available in agentic pipelines). This must be resolved before Stage 11.
 
 ---
 
@@ -185,8 +198,8 @@ Generate and store prompt embeddings. Use similarity search over `RequestLog` to
 ### Stage 6 — Observability
 Add Prometheus metrics and Grafana dashboards. Track request latency, provider error rates, DB query times, and routing decisions per model. Required before any scaling work — you can't reason about bottlenecks without visibility.
 
-### Stage 7 — Replace Ollama with vLLM
-Ollama is used as the local cheap provider for development because it is free and runs on Apple Silicon via Metal. It is not suitable for production — Docker containers on Mac cannot access the Metal GPU, so Ollama in a containerised environment falls back to CPU-only inference. Replace the Ollama adapter with vLLM, a production-grade inference server that runs in Docker, supports NVIDIA/AMD GPUs, and exposes an OpenAI-compatible API. The adapter pattern means this is largely a config and adapter swap. The Ollama adapter can be retained for local dev via an env flag.
+### Stage 7 — Multi-Provider Expansion
+Add Google Gemini Flash and Anthropic Claude as cloud providers alongside the existing OpenAI and Ollama options. This gives the router four meaningfully differentiated choices: free local (Ollama), cheap + large-context cloud (Gemini Flash), mid-range general (GPT-4o-mini), and capable cloud (Claude Haiku). The routing logic is upgraded from a binary cheap/capable split to a cost-table-driven model that routes on cost, task type, and context window requirements. Gemini and Anthropic both use non-OpenAI API formats, so each requires a real adapter implementation — not a URL swap.
 
 ### Stage 8 — Horizontal scaling
 Run multiple gateway instances behind an nginx load balancer. Gateway is stateless by design so this requires no application changes. Add PgBouncer between the gateway instances and Postgres to pool connections — this is typically the first database bottleneck under concurrent load.
@@ -198,7 +211,12 @@ Add a Postgres read replica. V2 embedding similarity queries are reads — route
 Add per-client rate limiting at the nginx layer. Throttle clients before requests reach the gateway. Implement as a sliding window per API key.
 
 ### Stage 11 — V3 Router *(later)*
-Train a lightweight classifier on accumulated routing data. Scope depends on data volume and available quality signals.
+Implement the LinUCB contextual bandit router. Warm-start its priors using a HuggingFace
+preference dataset (LMSYS Chatbot Arena) to reduce cold-start exploration cost. Initial
+reward signal is cost × (1 / latency_ms) — automatic and requires no user input. A quality
+component (LLM-as-judge or user feedback) can be layered onto the reward function once a
+quality signal is defined. Requires sufficient `RequestLog` history from V1/V2 and a
+resolved answer to the quality signal open question.
 
 ---
 

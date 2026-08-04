@@ -7,8 +7,10 @@ from gateway.models.request import (
 
 OPENAI_MODEL = "gpt-4o-mini"
 OLLAMA_MODEL = "llama3.2:3b"
+GEMINI_MODEL = "gemini-2.0-flash"
+CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
-_KNOWN_MODELS = {OPENAI_MODEL, OLLAMA_MODEL}
+_KNOWN_MODELS = {OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, CLAUDE_MODEL}
 
 _OPENAI_FIRST = [OPENAI_MODEL, OLLAMA_MODEL]
 _OLLAMA_FIRST = [OLLAMA_MODEL, OPENAI_MODEL]
@@ -16,6 +18,17 @@ _OLLAMA_FIRST = [OLLAMA_MODEL, OPENAI_MODEL]
 MODEL_PROVIDER = {
     OPENAI_MODEL: "openai",
     OLLAMA_MODEL: "ollama",
+    GEMINI_MODEL: "google",
+    CLAUDE_MODEL: "anthropic",
+}
+
+# USD per million input tokens — used to rank models when no stronger signal applies.
+# Output costs are not used for routing (unknown until after the call).
+INPUT_COST_PER_MTOK: dict[str, float] = {
+    OLLAMA_MODEL: 0.0,
+    GEMINI_MODEL: 0.075,
+    OPENAI_MODEL: 0.15,
+    CLAUDE_MODEL: 0.80,
 }
 
 _TASK_TYPE_PREFERS_OPENAI = {TaskType.code, TaskType.math}
