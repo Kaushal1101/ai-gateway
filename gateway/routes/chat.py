@@ -7,6 +7,7 @@ from gateway.db import AsyncSessionLocal
 from gateway.models.log import RequestLog, ResponseStatus
 from gateway.models.request import CanonicalRequest
 from gateway.models.response import CanonicalResponse
+from gateway.router import MODEL_PROVIDER
 
 app_router = APIRouter()
 
@@ -41,6 +42,9 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
                 embedding=vec,
             )
 
+            # Prometheus fallback count tracking
+            metrics.REQUEST_FALLBACKS.observe(fallback_count)
+
             # Prometheus model and route tracking
             metrics.MODEL_CHOSEN.labels(
                 model=response.model, routing_version="v2" if similar else "v1"
@@ -54,6 +58,10 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
         except Exception as e:
             fallback_count += 1
             last_exc = e
+
+            # Prometheus provider error tracking
+            provider = MODEL_PROVIDER.get(model, model)
+            metrics.PROVIDER_ERRORS.labels(provider=provider).inc()
 
     else:
         log = RequestLog(
@@ -70,6 +78,9 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
         async with AsyncSessionLocal() as session:
             session.add(log)
             await session.commit()
+
+        # Prometheus fallback count tracking
+        metrics.REQUEST_FALLBACKS.observe(fallback_count)
 
         # Prometheus latency tracking
         duration_ms = (time.monotonic() - start) * 1000
