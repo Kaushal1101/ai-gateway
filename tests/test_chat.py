@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from gateway.main import app
 from gateway.models.response import CanonicalResponse, FinishReason
-from gateway.router import OLLAMA_MODEL, OPENAI_MODEL
+from gateway.router import GEMINI_MODEL, OLLAMA_MODEL, OPENAI_MODEL
 
 client = TestClient(app)
 
@@ -120,9 +120,9 @@ def test_chat_log_written_on_error():
     session_instance.add.assert_called_once()
     log = session_instance.add.call_args[0][0]
     assert log.response_status.value == "error"
-    assert log.chosen_model == OLLAMA_MODEL
+    assert log.chosen_model == GEMINI_MODEL
     assert log.input_tokens is None
-    assert log.fallback_count == 2  # both ranked models tried and failed
+    assert log.fallback_count == 3  # all 3 ranked models tried and failed
 
 
 def test_chat_fallback_succeeds_on_second_model():
@@ -154,7 +154,7 @@ def test_chat_all_models_fail_returns_500():
         )
 
     assert response.status_code == 500
-    assert dispatch_mock.call_count == 2  # all ranked models were tried
+    assert dispatch_mock.call_count == 3  # all ranked models were tried
 
 
 def test_chat_fallback_count_logged_on_fallback():
@@ -221,7 +221,7 @@ def test_metrics_recorded_on_fallback():
     ):
         client.post("/chat", json={"messages": [{"role": "user", "content": "hello"}]})
 
-    m_errors.labels.assert_called_once_with(provider="ollama")
+    m_errors.labels.assert_called_once_with(provider="google")
     m_errors.labels.return_value.inc.assert_called_once()
     m_fallbacks.observe.assert_called_once_with(1)
     m_model.labels.assert_called_once_with(model=OPENAI_MODEL, routing_version="v1")
@@ -246,7 +246,7 @@ def test_metrics_recorded_on_all_models_fail():
             "/chat", json={"messages": [{"role": "user", "content": "hello"}]}
         )
 
-    assert m_errors.labels.call_count == 2
-    m_fallbacks.observe.assert_called_once_with(2)
+    assert m_errors.labels.call_count == 3
+    m_fallbacks.observe.assert_called_once_with(3)
     m_latency.observe.assert_called_once()
     m_model.labels.assert_not_called()

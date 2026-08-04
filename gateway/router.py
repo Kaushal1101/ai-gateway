@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from gateway.models.request import (
     CanonicalRequest,
     LatencyHint,
@@ -11,9 +13,6 @@ GEMINI_MODEL = "gemini-2.0-flash"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 _KNOWN_MODELS = {OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, CLAUDE_MODEL}
-
-_OPENAI_FIRST = [OPENAI_MODEL, OLLAMA_MODEL]
-_OLLAMA_FIRST = [OLLAMA_MODEL, OPENAI_MODEL]
 
 MODEL_PROVIDER = {
     OPENAI_MODEL: "openai",
@@ -31,7 +30,49 @@ INPUT_COST_PER_MTOK: dict[str, float] = {
     CLAUDE_MODEL: 0.80,
 }
 
-_TASK_TYPE_PREFERS_OPENAI = {TaskType.code, TaskType.math}
+# Ranked lists — ordered by preference for each routing case.
+# Each list has exactly 3 models; the 4th is excluded as unsuitable for that case.
+_LATENCY_SENSITIVE = [
+    OLLAMA_MODEL,
+    GEMINI_MODEL,
+    OPENAI_MODEL,
+]  # Claude excluded: slowest, costliest
+_SUMMARIZATION = [
+    GEMINI_MODEL,
+    OPENAI_MODEL,
+    CLAUDE_MODEL,
+]  # Ollama excluded: 3B too small for long docs
+_PRECISION = [
+    CLAUDE_MODEL,
+    OPENAI_MODEL,
+    GEMINI_MODEL,
+]  # Ollama excluded: 3B insufficient for code/math
+_CREATIVE = [
+    OPENAI_MODEL,
+    CLAUDE_MODEL,
+    GEMINI_MODEL,
+]  # Ollama excluded: 3B quality ceiling too low
+_DEFAULT = [
+    GEMINI_MODEL,
+    OPENAI_MODEL,
+    OLLAMA_MODEL,
+]  # Claude excluded: too costly for general tasks
+
+# Priority rule table — first matching rule wins.
+# V1 rules only; V2 similarity is applied after these in rank().
+_RULES: list[tuple[Callable[[CanonicalRequest], bool], list[str]]] = [
+    (lambda r: r.latency_hint == LatencyHint.low, _LATENCY_SENSITIVE),
+    (
+        lambda r: (
+            r.task_type == TaskType.summarization
+            or (r.estimated_input_tokens or 0) > 4000
+        ),
+        _SUMMARIZATION,
+    ),
+    (lambda r: r.task_type in {TaskType.code, TaskType.math}, _PRECISION),
+    (lambda r: r.task_type in {TaskType.translation, TaskType.creative}, _CREATIVE),
+    (lambda r: r.prompt_complexity == PromptComplexity.high, _PRECISION),
+]
 
 
 def _rank_v2(similar: list[tuple[str, float]]) -> list[str]:
@@ -47,19 +88,13 @@ def rank(
             raise ValueError(f"Unknown model: {request.model!r}")
         return [request.model]
 
-    # Latency-sensitive: always prefer fast local model regardless of task
-    if request.latency_hint == LatencyHint.low:
-        return _OLLAMA_FIRST
+    # V1 rules — explicit signals take precedence over historical similarity
+    for condition, ranked in _RULES:
+        if condition(request):
+            return ranked
 
-    # V2: use historical similarity when available
+    # V2 — use historical similarity when no V1 rule matched
     if similar:
         return _rank_v2(similar)
 
-    # V1: precision tasks and high complexity prefer the more capable model
-    if request.task_type in _TASK_TYPE_PREFERS_OPENAI:
-        return _OPENAI_FIRST
-    if request.prompt_complexity == PromptComplexity.high:
-        return _OPENAI_FIRST
-
-    # Default: prefer cheap local model
-    return _OLLAMA_FIRST
+    return _DEFAULT

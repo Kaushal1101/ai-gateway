@@ -7,7 +7,7 @@ from gateway.models.request import (
     PromptComplexity,
     TaskType,
 )
-from gateway.router import OLLAMA_MODEL, OPENAI_MODEL, rank
+from gateway.router import CLAUDE_MODEL, GEMINI_MODEL, OLLAMA_MODEL, OPENAI_MODEL, rank
 
 
 def _make_request(**kwargs) -> CanonicalRequest:
@@ -38,11 +38,11 @@ def test_rank_latency_low_overrides_code_task():
 @pytest.mark.parametrize(
     "task_type,expected",
     [
-        (TaskType.code, OPENAI_MODEL),
-        (TaskType.math, OPENAI_MODEL),
-        (TaskType.summarization, OLLAMA_MODEL),
-        (TaskType.translation, OLLAMA_MODEL),
-        (TaskType.creative, OLLAMA_MODEL),
+        (TaskType.code, CLAUDE_MODEL),
+        (TaskType.math, CLAUDE_MODEL),
+        (TaskType.summarization, GEMINI_MODEL),
+        (TaskType.translation, OPENAI_MODEL),
+        (TaskType.creative, OPENAI_MODEL),
     ],
 )
 def test_rank_task_type_routing(task_type, expected):
@@ -50,14 +50,14 @@ def test_rank_task_type_routing(task_type, expected):
     assert rank(request)[0] == expected
 
 
-def test_rank_high_complexity_prefers_openai():
+def test_rank_high_complexity_prefers_claude():
     request = _make_request(prompt_complexity=PromptComplexity.high)
-    assert rank(request)[0] == OPENAI_MODEL
+    assert rank(request)[0] == CLAUDE_MODEL
 
 
-def test_rank_default_prefers_ollama():
+def test_rank_default_prefers_gemini():
     request = _make_request()
-    assert rank(request)[0] == OLLAMA_MODEL
+    assert rank(request)[0] == GEMINI_MODEL
 
 
 def test_rank_always_returns_multiple_models():
@@ -87,11 +87,18 @@ def test_rank_latency_hint_takes_precedence_over_v2():
     assert rank(request, similar)[0] == OLLAMA_MODEL
 
 
-def test_rank_v2_falls_back_to_v1_when_similar_empty():
+def test_rank_v2_falls_back_to_default_when_similar_empty():
     request = _make_request()
-    assert rank(request, similar=[])[0] == OLLAMA_MODEL
+    assert rank(request, similar=[])[0] == GEMINI_MODEL
 
 
-def test_rank_v2_falls_back_to_v1_when_similar_none():
+def test_rank_v2_falls_back_to_default_when_similar_none():
     request = _make_request()
-    assert rank(request, similar=None)[0] == OLLAMA_MODEL
+    assert rank(request, similar=None)[0] == GEMINI_MODEL
+
+
+def test_rank_v1_task_type_takes_precedence_over_v2():
+    # V1 signals are explicit client intent — they override historical similarity
+    request = _make_request(task_type=TaskType.code)
+    similar = [(OLLAMA_MODEL, 0.97)]
+    assert rank(request, similar)[0] == CLAUDE_MODEL
