@@ -7,7 +7,14 @@ from gateway.models.request import (
     PromptComplexity,
     TaskType,
 )
-from gateway.router import CLAUDE_MODEL, GEMINI_MODEL, OLLAMA_MODEL, OPENAI_MODEL, rank
+from gateway.router import (
+    CLAUDE_MODEL,
+    GEMINI_MODEL,
+    OLLAMA_MODEL,
+    OPENAI_MODEL,
+    rank_v1,
+    rank_v2,
+)
 
 
 def _make_request(**kwargs) -> CanonicalRequest:
@@ -16,23 +23,23 @@ def _make_request(**kwargs) -> CanonicalRequest:
 
 def test_rank_model_override_bypasses_router():
     request = _make_request(model=OPENAI_MODEL)
-    assert rank(request) == [OPENAI_MODEL]
+    assert rank_v1(request) == [OPENAI_MODEL]
 
 
 def test_rank_unknown_model_raises():
     request = _make_request(model="gpt-99-ultra")
     with pytest.raises(ValueError, match="Unknown model"):
-        rank(request)
+        rank_v1(request)
 
 
 def test_rank_latency_low_prefers_ollama():
     request = _make_request(latency_hint=LatencyHint.low)
-    assert rank(request)[0] == OLLAMA_MODEL
+    assert rank_v1(request)[0] == OLLAMA_MODEL
 
 
 def test_rank_latency_low_overrides_code_task():
     request = _make_request(latency_hint=LatencyHint.low, task_type=TaskType.code)
-    assert rank(request)[0] == OLLAMA_MODEL
+    assert rank_v1(request)[0] == OLLAMA_MODEL
 
 
 @pytest.mark.parametrize(
@@ -47,58 +54,55 @@ def test_rank_latency_low_overrides_code_task():
 )
 def test_rank_task_type_routing(task_type, expected):
     request = _make_request(task_type=task_type)
-    assert rank(request)[0] == expected
+    assert rank_v1(request)[0] == expected
 
 
 def test_rank_high_complexity_prefers_claude():
     request = _make_request(prompt_complexity=PromptComplexity.high)
-    assert rank(request)[0] == CLAUDE_MODEL
+    assert rank_v1(request)[0] == CLAUDE_MODEL
 
 
-def test_rank_default_prefers_gemini():
+def test_rank_v1_returns_none_for_default_request():
     request = _make_request()
-    assert rank(request)[0] == GEMINI_MODEL
-
-
-def test_rank_always_returns_multiple_models():
-    request = _make_request()
-    assert len(rank(request)) > 1
+    assert rank_v1(request) is None
 
 
 # --- V2 routing (similarity-based) ---
 
 
 def test_rank_v2_uses_similar_when_provided():
-    request = _make_request()
     similar = [(OPENAI_MODEL, 0.97)]
-    assert rank(request, similar) == [OPENAI_MODEL]
+    assert rank_v2(similar) == [OPENAI_MODEL]
 
 
 def test_rank_v2_returns_all_similar_models_in_order():
-    request = _make_request()
     similar = [(OPENAI_MODEL, 0.97), (OLLAMA_MODEL, 0.93)]
-    assert rank(request, similar) == [OPENAI_MODEL, OLLAMA_MODEL]
-
-
-def test_rank_latency_hint_takes_precedence_over_v2():
-    # latency_hint is client-provided, so it overrides gateway-inferred similarity
-    request = _make_request(latency_hint=LatencyHint.low)
-    similar = [(OPENAI_MODEL, 0.97)]
-    assert rank(request, similar)[0] == OLLAMA_MODEL
+    assert rank_v2(similar) == [OPENAI_MODEL, OLLAMA_MODEL]
 
 
 def test_rank_v2_falls_back_to_default_when_similar_empty():
-    request = _make_request()
-    assert rank(request, similar=[])[0] == GEMINI_MODEL
+    assert rank_v2([])[0] == GEMINI_MODEL
 
 
 def test_rank_v2_falls_back_to_default_when_similar_none():
-    request = _make_request()
-    assert rank(request, similar=None)[0] == GEMINI_MODEL
+    assert rank_v2(None)[0] == GEMINI_MODEL
 
 
-def test_rank_v1_task_type_takes_precedence_over_v2():
-    # V1 signals are explicit client intent — they override historical similarity
+def test_rank_v2_always_returns_multiple_models():
+    assert len(rank_v2([])) > 1
+
+
+def test_rank_v2_filters_stale_model_names():
+    similar = [("gpt-99-deprecated", 0.97), (OPENAI_MODEL, 0.93)]
+    assert rank_v2(similar) == [OPENAI_MODEL]
+
+
+def test_rank_v1_takes_precedence_when_task_type_set():
+    # V1 fires for code — caller never reaches rank_v2
     request = _make_request(task_type=TaskType.code)
-    similar = [(OLLAMA_MODEL, 0.97)]
-    assert rank(request, similar)[0] == CLAUDE_MODEL
+    assert rank_v1(request)[0] == CLAUDE_MODEL
+
+
+def test_rank_v1_takes_precedence_when_latency_hint_low():
+    request = _make_request(latency_hint=LatencyHint.low)
+    assert rank_v1(request)[0] == OLLAMA_MODEL

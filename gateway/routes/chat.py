@@ -25,12 +25,20 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
     except Exception:
         vec = None
 
-    similar = await similarity.find_similar(vec)
-
     try:
-        ranked = router.rank(enriched, similar)
+        ranked = router.rank_v1(enriched)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if ranked is None:
+        try:
+            similar = await similarity.find_similar(vec)
+        except Exception:
+            similar = []  # DB failure — rank_v2 will fall back to _DEFAULT
+        ranked = router.rank_v2(similar)
+        routing_version = "v2" if similar else "v1"
+    else:
+        routing_version = "v1"
 
     last_exc = None
     fallback_count = 0
@@ -54,7 +62,7 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
 
             # Prometheus model and route tracking
             metrics.MODEL_CHOSEN.labels(
-                model=response.model, routing_version="v2" if similar else "v1"
+                model=response.model, routing_version=routing_version
             ).inc()
 
             # Prometheus latency tracking

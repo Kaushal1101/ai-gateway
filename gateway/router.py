@@ -75,26 +75,23 @@ _RULES: list[tuple[Callable[[CanonicalRequest], bool], list[str]]] = [
 ]
 
 
-def _rank_v2(similar: list[tuple[str, float]]) -> list[str]:
-    return [model for model, _ in similar]
-
-
-def rank(
-    request: CanonicalRequest, similar: list[tuple[str, float]] | None = None
-) -> list[str]:
-    # Client override — bypass routing entirely
+def rank_v1(request: CanonicalRequest) -> list[str] | None:
+    """Run V1 rules. Returns a ranked list if a rule matched, None if no rule fired."""
     if request.model:
         if request.model not in _KNOWN_MODELS:
             raise ValueError(f"Unknown model: {request.model!r}")
         return [request.model]
 
-    # V1 rules — explicit signals take precedence over historical similarity
     for condition, ranked in _RULES:
         if condition(request):
             return ranked
 
-    # V2 — use historical similarity when no V1 rule matched
-    if similar:
-        return _rank_v2(similar)
+    return None
 
-    return _DEFAULT
+
+def rank_v2(similar: list[tuple[str, float]] | None) -> list[str]:
+    """Rank from similarity results, filtering stale names. Falls back to default."""
+    if not similar:
+        return _DEFAULT
+    filtered = [model for model, _ in similar if model in _KNOWN_MODELS]
+    return filtered or _DEFAULT
