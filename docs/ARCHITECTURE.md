@@ -108,9 +108,25 @@ Client HTTP request
   Infer fields (tiktoken, keyword matching)
         │
         ▼
-  Router → ranked model list (max 3)
+  Embed request text (Ollama nomic-embed-text)
+  [failure → vec=None, continue without embedding]
         │
         ▼
+  V1 routing — run rule table against request fields
+        │
+   ┌────┴──────────────────┐
+   │ rule matched          │ no rule matched
+   │ ranked = rule list    │    │
+   └────┬──────────────────┘    ▼
+        │             Similarity search (Postgres pgvector)
+        │             [failure → similar=[], use default]
+        │                    │
+        │             V2 routing — rank by similarity
+        │             [empty → fall back to _DEFAULT]
+        │                    │
+        └────────────────────┘
+                     │
+                     ▼
   Adapter for top-ranked model
         │
    ┌────┴────┐
@@ -121,7 +137,8 @@ Client HTTP request
   Canonical response
         │
         ▼
-  Log to RequestLog (async, non-blocking)
+  Log to RequestLog (best-effort — exceptions swallowed,
+  response returned regardless of log success)
         │
         ▼
   Return to client
@@ -144,7 +161,7 @@ This matters here because LLM API calls can take several seconds — far longer 
 | Location | Why |
 |---|---|
 | FastAPI route handlers (`async def`) | Entry point must be async so multiple requests can be handled concurrently |
-| Provider API calls (`httpx.AsyncClient`) | Network calls to OpenAI/Claude/Ollama — the primary bottleneck, can take seconds |
+| Provider API calls (`httpx.AsyncClient`) | Network calls to OpenAI/Gemini/Claude/Ollama — the primary bottleneck, can take seconds |
 | Database writes (SQLAlchemy async session) | Writing `RequestLog` to Postgres is also a network call |
 
 ### Where async is not used
@@ -157,13 +174,19 @@ Token estimation (`tiktoken`) and keyword matching for `task_type` inference are
 
 Secrets and environment-specific config are loaded from a `.env` file at startup via `python-dotenv`. Never commit `.env` — use `.env.example` as the template.
 
+Cloud API keys (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`) are validated at startup — the server refuses to start if any are missing.
+
 | Variable | Required | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | Stage 1+ | OpenAI API key |
-| `ANTHROPIC_API_KEY` | Stage 3+ | Anthropic API key |
-| `OLLAMA_BASE_URL` | Stage 3+ | Ollama endpoint, default `http://localhost:11434` |
-| `DATABASE_URL` | Stage 2+ | Postgres connection string, e.g. `postgresql+asyncpg://user:pass@localhost/gateway` |
+| `OPENAI_API_KEY` | Yes | OpenAI API key |
+| `GEMINI_API_KEY` | Yes | Google Gemini API key |
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key |
+| `OLLAMA_BASE_URL` | No | Ollama endpoint, default `http://localhost:11434` |
+| `DATABASE_URL` | Yes | Postgres connection string, e.g. `postgresql+asyncpg://user:pass@localhost/gateway` |
 | `GATEWAY_PORT` | No | Port to run the server on, default `8000` |
+| `GATEWAY_CONNECT_TIMEOUT` | No | Provider connect timeout in seconds, default `5.0` |
+| `EMBEDDING_DIMS` | No | Embedding vector dimensions, default `768` |
+| `SIMILARITY_THRESHOLD` | No | Minimum cosine similarity for V2 routing, default `0.9` |
 
 ---
 
