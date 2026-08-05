@@ -90,16 +90,14 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
             fallback_count=fallback_count,
             embedding=None,
         )
+        # Prometheus metrics observed before DB write to match success path boundary
+        metrics.REQUEST_FALLBACKS.observe(fallback_count)
+        duration_ms = (time.monotonic() - start) * 1000
+        metrics.REQUEST_LATENCY.observe(duration_ms)
+
         async with AsyncSessionLocal() as session:
             session.add(log)
             await session.commit()
-
-        # Prometheus fallback count tracking
-        metrics.REQUEST_FALLBACKS.observe(fallback_count)
-
-        # Prometheus latency tracking
-        duration_ms = (time.monotonic() - start) * 1000
-        metrics.REQUEST_LATENCY.observe(duration_ms)
 
         raise last_exc
 
