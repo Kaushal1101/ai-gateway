@@ -101,8 +101,14 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
 
         raise last_exc
 
-    async with AsyncSessionLocal() as session:
-        session.add(log)
-        await session.commit()
+    # Best-effort logging — a DB failure here must not fail the client response.
+    # Downside: missing log rows mean V2 routing loses data points for those requests.
+    # TODO: replace with BackgroundTasks or an outbox pattern for durability.
+    try:
+        async with AsyncSessionLocal() as session:
+            session.add(log)
+            await session.commit()
+    except Exception:
+        pass
 
     return response
