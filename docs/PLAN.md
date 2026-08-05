@@ -92,7 +92,7 @@ The response returned to the client after a provider call completes.
 |---|---|---|
 | `content` | `string` | The model's response text |
 | `model` | `string` | The model that actually handled the request (may differ from what was requested if fallback occurred) |
-| `provider` | `string` | The provider that served the request (`openai`, `anthropic`, `ollama`) |
+| `provider` | `string` | The provider that served the request (`openai`, `anthropic`, `ollama`, `google`) |
 | `input_tokens` | `int` | Actual input tokens used, as reported by the provider |
 | `output_tokens` | `int` | Actual output tokens generated |
 | `latency_ms` | `int` | Time from request dispatch to response, in milliseconds |
@@ -166,6 +166,20 @@ The router is unaware of fallback state — it only produces the ranked list.
 ## Circuit Breaker *(later)*
 
 Track failure rates per provider over a rolling window and temporarily remove providers exceeding a failure threshold. Deferred — adds operational complexity that isn't needed until the system is handling real traffic across multiple providers.
+
+---
+
+## Future Additions
+
+### Streaming support
+
+The `stream` field exists in `CanonicalRequest` but is currently rejected with 501. Full streaming requires changes at three layers:
+
+- **Adapters** — switch from `response.json()` to `httpx`'s streaming mode, yielding chunks as they arrive
+- **Route** — return FastAPI's `StreamingResponse` instead of `CanonicalResponse`
+- **Schema** — `CanonicalResponse` assumes token counts and finish reason are known upfront; streaming defers these to the final chunk (if the provider sends them at all)
+
+Each provider also has a different chunk format (OpenAI uses SSE `data: {...}`, Gemini and Anthropic have their own formats), so each adapter needs its own streaming path. This is a meaningful standalone feature and should be planned as a dedicated stage once the core routing and scaling work is stable.
 
 ---
 

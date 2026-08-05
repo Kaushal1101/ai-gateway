@@ -1,6 +1,6 @@
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from gateway import adapters, embedding, enrichment, metrics, router, similarity
 from gateway.db import AsyncSessionLocal
@@ -14,6 +14,9 @@ app_router = APIRouter()
 
 @app_router.post("/chat", response_model=CanonicalResponse)
 async def chat(request: CanonicalRequest) -> CanonicalResponse:
+    if request.stream:
+        raise HTTPException(status_code=501, detail="Streaming is not yet supported.")
+
     start = time.monotonic()
     enriched = enrichment.enrich(request)
 
@@ -23,7 +26,11 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
         vec = None
 
     similar = await similarity.find_similar(vec)
-    ranked = router.rank(enriched, similar)
+
+    try:
+        ranked = router.rank(enriched, similar)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     last_exc = None
     fallback_count = 0
