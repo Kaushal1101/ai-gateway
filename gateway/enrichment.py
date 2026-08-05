@@ -91,7 +91,9 @@ def enrich(request: CanonicalRequest) -> CanonicalRequest:
 
     return request.model_copy(
         update={
-            "estimated_input_tokens": request.estimated_input_tokens or tokens,
+            "estimated_input_tokens": request.estimated_input_tokens
+            if request.estimated_input_tokens is not None
+            else tokens,
             "task_type": request.task_type or task_type,
             "prompt_complexity": request.prompt_complexity or complexity,
         }

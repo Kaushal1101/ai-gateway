@@ -52,7 +52,9 @@ class CanonicalRequest(BaseModel):
         return data
 
     @model_validator(mode="after")
-    def _require_user_message(self) -> "CanonicalRequest":
+    def _validate_messages(self) -> "CanonicalRequest":
         if not any(m.role == "user" for m in self.messages):
             raise ValueError("At least one user message is required.")
+        if sum(1 for m in self.messages if m.role == "system") > 1:
+            raise ValueError("At most one system message is allowed.")
         return self
