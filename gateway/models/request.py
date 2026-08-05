@@ -44,6 +44,13 @@ class CanonicalRequest(BaseModel):
     task_type: TaskType | None = None
     prompt_complexity: PromptComplexity | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_prompt(cls, data: dict) -> dict:
+        if "prompt" in data and "messages" not in data:
+            data["messages"] = [{"role": "user", "content": data.pop("prompt")}]
+        return data
+
     @model_validator(mode="after")
     def _require_user_message(self) -> "CanonicalRequest":
         if not any(m.role == "user" for m in self.messages):
