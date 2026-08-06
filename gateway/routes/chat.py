@@ -21,16 +21,20 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
     enriched = enrichment.enrich(request)
 
     try:
-        vec = await embedding.embed(enriched)
-    except Exception:
-        vec = None
-
-    try:
         ranked = router.rank_v1(enriched)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    if ranked is None:
+    if enriched.model:
+        # Explicit model override — skip embedding and similarity, routing is bypassed
+        vec = None
+        routing_version = "v1"
+    elif ranked is None:
+        # No V1 rule matched — embed then search for V2
+        try:
+            vec = await embedding.embed(enriched)
+        except Exception:
+            vec = None
         try:
             similar = await similarity.find_similar(vec)
         except Exception:
@@ -38,6 +42,11 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
         ranked = router.rank_v2(similar)
         routing_version = "v2" if similar else "v1"
     else:
+        # V1 rule matched — embed for logging, skip similarity
+        try:
+            vec = await embedding.embed(enriched)
+        except Exception:
+            vec = None
         routing_version = "v1"
 
     last_exc = None
