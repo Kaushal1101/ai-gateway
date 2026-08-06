@@ -104,9 +104,12 @@ async def chat(request: CanonicalRequest) -> CanonicalResponse:
         duration_ms = (time.monotonic() - start) * 1000
         metrics.REQUEST_LATENCY.observe(duration_ms)
 
-        async with AsyncSessionLocal() as session:
-            session.add(log)
-            await session.commit()
+        try:
+            async with AsyncSessionLocal() as session:
+                session.add(log)
+                await session.commit()
+        except Exception:
+            pass
 
         raise last_exc
 
