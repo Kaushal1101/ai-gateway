@@ -50,6 +50,12 @@ uv sync
 
 ---
 
+## Permissions
+
+- Edit `notes.md` freely without asking for confirmation.
+
+---
+
 ## How to Work With Me
 
 - Before writing any code for a new component, explain the concept and discuss tradeoffs. Wait for agreement before implementing.
