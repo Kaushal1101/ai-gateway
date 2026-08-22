@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: gateway
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -14,6 +14,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  pgbouncer:
+    image: edoburu/pgbouncer
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:v3.4.0
