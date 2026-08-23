@@ -46,8 +46,8 @@ FastAPI is the right choice for a gateway for two reasons:
 
 | Tool | Purpose | Stage |
 |---|---|---|
-| nginx | Reverse proxy and load balancer across multiple gateway instances | 7 |
-| PgBouncer | Connection pooler between gateway instances and Postgres | 7 |
+| nginx | Reverse proxy and load balancer across multiple gateway instances | 8 |
+| PgBouncer | Connection pooler between gateway instances and Postgres | 8 |
 | Prometheus | Metrics collection | 6 |
 | Grafana | Metrics dashboards | 6 |
 
@@ -58,35 +58,46 @@ FastAPI is the right choice for a gateway for two reasons:
 ```
 ai-gateway/
 ├── gateway/
-│   ├── __main__.py           # entry point: uvicorn server startup
-│   ├── main.py               # FastAPI app, lifespan, route mounting
+│   ├── __main__.py           # entry point: uvicorn server startup (local dev)
+│   ├── main.py               # FastAPI app, lifespan, /metrics endpoint
 │   ├── db.py                 # SQLAlchemy engine, session factory, Base
+│   ├── embedding.py          # Ollama embedding calls
+│   ├── enrichment.py         # token estimation, task type, complexity inference
+│   ├── metrics.py            # Prometheus counters and histograms
+│   ├── router.py             # V1 rule table and V2 similarity ranking
+│   ├── similarity.py         # pgvector cosine similarity search
 │   ├── models/
 │   │   ├── request.py        # canonical request (Pydantic model)
 │   │   ├── response.py       # canonical response (Pydantic model)
 │   │   └── log.py            # RequestLog (SQLAlchemy model)
 │   ├── adapters/
-│   │   └── openai.py         # OpenAI adapter
+│   │   ├── openai.py         # OpenAI adapter
+│   │   ├── ollama.py         # Ollama adapter
+│   │   ├── gemini.py         # Google Gemini adapter
+│   │   └── claude.py         # Anthropic Claude adapter
 │   └── routes/
 │       └── chat.py           # /chat route handler
 ├── migrations/
 │   ├── env.py                # Alembic runtime config
 │   ├── script.py.mako        # migration file template
 │   └── versions/             # one file per migration
-├── infra/
-│   ├── nginx.conf            # nginx load balancer config (Stage 7)
-│   ├── prometheus.yml        # Prometheus scrape config (Stage 6)
-│   └── pgbouncer.ini         # PgBouncer connection pool config (Stage 7)
+├── nginx/
+│   └── nginx.conf            # load balancer config — upstream + proxy_pass
+├── pgbouncer/
+│   ├── pgbouncer.ini         # transaction-mode pool config
+│   └── userlist.txt          # PgBouncer auth credentials
+├── grafana/
+│   ├── dashboards/           # provisioned Grafana dashboard JSON
+│   └── provisioning/         # datasource and dashboard provisioning config
 ├── tests/
 ├── docs/
-├── .github/
-│   └── workflows/
-│       └── ci.yml            # GitHub Actions CI
 ├── .githooks/
 ├── .claude/
+├── Dockerfile                # builds the gateway image for Docker deployment
+├── docker-compose.yml        # full local stack: Postgres, PgBouncer, nginx, Prometheus, Grafana
+├── prometheus.yml            # Prometheus scrape config
 ├── .env                      # local secrets — never committed
 ├── .env.example              # template showing required variables
-├── docker-compose.yml        # local Postgres
 └── pyproject.toml
 ```
 
@@ -192,15 +203,17 @@ Cloud API keys (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`) are val
 
 ## Local Development
 
-Postgres runs in Docker:
+The full infrastructure stack runs in Docker:
 
 ```sh
-docker compose up -d        # start Postgres
+docker compose up -d        # start Postgres, PgBouncer, nginx, Prometheus, Grafana
 uv sync                     # install dependencies
 git config core.hooksPath .githooks
 cp .env.example .env        # fill in your API keys
-uv run python -m gateway    # start the server
+uv run python -m gateway    # start the server locally (dev mode, with reload)
 ```
+
+For production-like local runs, the gateway also runs in Docker behind nginx. In that case, build and start everything with `docker compose up -d --build` — the gateway is reachable at `http://localhost:80`.
 
 ---
 
@@ -211,10 +224,10 @@ uv run python -m gateway    # start the server
 | Hung provider calls blocking workers | Hard timeout on every `httpx` call | Stage 1 |
 | Provider API rate limits (429s) | Track requests/min per provider, route away proactively | Stage 3 |
 | No visibility into bottlenecks | Prometheus + Grafana | Stage 6 |
-| Single gateway process limit | nginx + multiple uvicorn instances | Stage 7 |
-| Postgres connection exhaustion | PgBouncer connection pooling | Stage 7 |
-| Read query latency under load | Postgres read replica | Stage 8 |
-| Client abuse / overload | nginx rate limiting per API key | Stage 9 |
+| Single gateway process limit | nginx + multiple uvicorn instances | Stage 8 |
+| Postgres connection exhaustion | PgBouncer connection pooling | Stage 8 |
+| Read query latency under load | Postgres read replica | Stage 9 |
+| Client abuse / overload | nginx rate limiting per API key | Stage 10 |
 
 Gateway is designed stateless from day one — all persistent state lives in Postgres, never in the process. This is the prerequisite that makes Stage 7 a config change rather than an architectural rewrite.
 

@@ -79,9 +79,9 @@ uv sync
 
 ## Current Stage
 
-**Stage 0 — Design**
+**Stage 9 — Database Scaling**
 
-Canonical request/response schema definition. No code until schemas are settled.
+Adding a Postgres read replica. Similarity queries routed to the replica; writes stay on the primary via PgBouncer.
 
 ---
 

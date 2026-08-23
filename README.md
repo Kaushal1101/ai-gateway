@@ -20,22 +20,34 @@ uv sync
 cp .env.example .env  # then fill in your API keys
 ```
 
-Start Postgres:
+Start the infrastructure stack:
 ```sh
 docker compose up -d
 ```
 
+This starts Postgres, PgBouncer, nginx, Prometheus, and Grafana.
+
 ## Running
 
+**Local dev** (reload on file change, direct access on port 8000):
 ```sh
 uv run python -m gateway
 ```
 
-The server starts on `http://localhost:8000`. Interactive API docs at `http://localhost:8000/docs`.
+**Production-like** (gateway runs in Docker behind nginx on port 80):
+```sh
+docker compose up -d --build
+```
 
 ### Example request
 
 ```sh
+# Through nginx (production-like)
+curl -X POST http://localhost:80/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "hello"}]}'
+
+# Direct (local dev only)
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "hello"}]}'
