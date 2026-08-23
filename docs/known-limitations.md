@@ -20,6 +20,12 @@ This is no worse than `.env` (which already holds the same credentials in plaint
 - **`auth_query`** — configure PgBouncer to query `pg_shadow` directly instead of using a local `userlist.txt`, so credentials live only in the database
 - **Secrets manager** — replace both `.env` and `userlist.txt` with AWS Secrets Manager, Vault, or equivalent
 
+## PgBouncer stats are not visible in Grafana
+
+PgBouncer exposes stats (pool sizes, client counts, latency) only through its admin console — a virtual `pgbouncer` database accessible via `psql`. Grafana cannot query this directly.
+
+The standard fix is to add a `pgbouncer_exporter` container that polls the admin console and exposes the results as Prometheus metrics, which Grafana can then visualise. This requires another container, a Prometheus scrape target, and a Grafana dashboard. Deferred to a later touchup stage.
+
 ## Ollama is a required dependency
 
 Ollama must be running locally for two reasons:
