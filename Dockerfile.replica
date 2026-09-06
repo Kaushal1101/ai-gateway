@@ -1,0 +1,6 @@
+FROM pgvector/pgvector:pg16
+
+COPY scripts/replica-entrypoint.sh /scripts/replica-entrypoint.sh
+RUN chmod +x /scripts/replica-entrypoint.sh
+
+ENTRYPOINT ["/bin/bash", "/scripts/replica-entrypoint.sh"]

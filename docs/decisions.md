@@ -23,3 +23,15 @@
 **Scalability:** Without an index, pgvector does a sequential scan — sufficient up to ~100k rows. When row count grows into the millions, an HNSW index (`CREATE INDEX ... USING hnsw`) restores sub-millisecond query times with no architecture change. This is planned for Stage 9.
 
 **When to revisit:** If similarity queries become a bottleneck that a Postgres read replica and HNSW index cannot address, or if vector search is needed across multiple data sources beyond `request_logs`.
+
+---
+
+## 3. No PgBouncer in front of the read replica
+
+**Context:** The primary Postgres instance sits behind PgBouncer to prevent connection exhaustion under concurrent write load from multiple gateway instances. The read replica receives only one query type: `similarity.find_similar()`.
+
+**Decision:** Connect to the replica directly via asyncpg, with no PgBouncer in between.
+
+**Why:** PgBouncer solves connection exhaustion — many app connections competing for a limited Postgres connection budget. At current scale only two gateway instances send similarity queries to the replica, so the connection count is trivially small. Adding PgBouncer would introduce another process and configuration surface with no benefit.
+
+**When to revisit:** If multiple services read from the replica, if traffic grows to where the replica regularly approaches its connection limit, or if long-running similarity queries pile up under sustained concurrent load.

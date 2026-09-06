@@ -20,6 +20,23 @@ This is no worse than `.env` (which already holds the same credentials in plaint
 - **`auth_query`** — configure PgBouncer to query `pg_shadow` directly instead of using a local `userlist.txt`, so credentials live only in the database
 - **Secrets manager** — replace both `.env` and `userlist.txt` with AWS Secrets Manager, Vault, or equivalent
 
+## Replica reads are not lag-aware
+
+The gateway routes similarity queries to the read replica without checking
+replication lag. If the replica falls behind the primary (e.g. after a restart
+or under write-heavy load), the gateway will still send reads to it, potentially
+getting stale results.
+
+In practice the lag is milliseconds and has no meaningful impact on routing
+quality — similarity search over historical prompts doesn't require up-to-the-
+millisecond data. But under failure conditions (replica reconnecting after a
+network partition, or catching up after downtime), lag could be seconds or
+minutes.
+
+The fix is lag-aware routing: check `pg_last_wal_replay_lsn()` on the replica
+and fall back to the primary if lag exceeds a threshold. Deferred — adds
+application complexity that isn't justified at this scale.
+
 ## PgBouncer stats are not visible in Grafana
 
 PgBouncer exposes stats (pool sizes, client counts, latency) only through its admin console — a virtual `pgbouncer` database accessible via `psql`. Grafana cannot query this directly.
