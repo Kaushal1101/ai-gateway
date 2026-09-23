@@ -30,7 +30,9 @@ async def test_find_similar_deduplicates_unanimous_model():
         _make_row(OLLAMA_MODEL, 0.95),
         _make_row(OLLAMA_MODEL, 0.93),
     ]
-    with patch("gateway.similarity.AsyncSessionLocal", new=_mock_db_session(rows)):
+    with patch(
+        "gateway.similarity.AsyncReplicaSessionLocal", new=_mock_db_session(rows)
+    ):
         result = await find_similar([0.0] * 768)
 
     assert result == [(OLLAMA_MODEL, 0.97)]
@@ -42,14 +44,16 @@ async def test_find_similar_deduplicates_mixed_models():
         _make_row(OLLAMA_MODEL, 0.95),
         _make_row(OPENAI_MODEL, 0.93),
     ]
-    with patch("gateway.similarity.AsyncSessionLocal", new=_mock_db_session(rows)):
+    with patch(
+        "gateway.similarity.AsyncReplicaSessionLocal", new=_mock_db_session(rows)
+    ):
         result = await find_similar([0.0] * 768)
 
     assert result == [(OLLAMA_MODEL, 0.97), (OPENAI_MODEL, 0.93)]
 
 
 async def test_find_similar_returns_empty_when_no_rows():
-    with patch("gateway.similarity.AsyncSessionLocal", new=_mock_db_session([])):
+    with patch("gateway.similarity.AsyncReplicaSessionLocal", new=_mock_db_session([])):
         result = await find_similar([0.0] * 768)
 
     assert result == []

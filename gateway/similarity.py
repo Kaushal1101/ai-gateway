@@ -2,7 +2,7 @@ import os
 
 from sqlalchemy import select
 
-from gateway.db import AsyncSessionLocal
+from gateway.db import AsyncReplicaSessionLocal
 from gateway.models.log import RequestLog, ResponseStatus
 
 _SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.9"))
@@ -32,7 +32,7 @@ async def find_similar(vec: list[float] | None) -> list[tuple[str, float]]:
         .limit(_TOP_K)
     )
 
-    async with AsyncSessionLocal() as session:
+    async with AsyncReplicaSessionLocal() as session:
         result = await session.execute(stmt)
         # Deduplicate by model: unanimous history may return fewer than _TOP_K entries,
         # which means the caller will have fewer fallback options — this is intentional.
